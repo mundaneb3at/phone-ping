@@ -1,0 +1,38 @@
+{
+  "_comment": "Merge these three hook entries into your ~/.claude/settings.json under the top-level 'hooks' key. Replace <USER> with your Windows username. If you already have other PreToolUse entries (linting, guards), add the AskUserQuestion entry as an ADDITIONAL object in the PreToolUse array — do not overwrite existing entries.",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NonInteractive -File \"C:\\Users\\<USER>\\.claude\\hooks\\ping_notify.ps1\""
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NonInteractive -File \"C:\\Users\\<USER>\\.claude\\hooks\\ping_notify.ps1\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NonInteractive -File \"C:\\Users\\<USER>\\.claude\\hooks\\ping_notify.ps1\""
+          }
+        ]
+      }
+    ]
+  }
+}

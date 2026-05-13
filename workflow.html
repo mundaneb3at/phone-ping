@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Claude Code → Phone Ping</title>
+<style>
+  :root{
+    --bg:#0f1115;
+    --bg-2:#161922;
+    --bg-3:#1d2230;
+    --fg:#e6e8ee;
+    --fg-2:#9aa3b2;
+    --fg-3:#6b7385;
+    --line:#252b39;
+    --accent:#22d3ee;
+    --accent-2:#0891b2;
+    --warn:#fbbf24;
+    --ok:#34d399;
+    --danger:#f87171;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code,kbd{font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--bg-3);padding:1px 6px;border-radius:5px;color:#cbd5e1}
+  pre{background:var(--bg-3);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#cbd5e1;margin:0}
+  pre code{background:transparent;padding:0}
+  .wrap{max-width:920px;margin:0 auto;padding:36px 28px 80px}
+
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:26px}
+  header h1{margin:0 0 4px;font-size:22px;letter-spacing:-0.01em}
+  header .sub{color:var(--fg-2);font-size:13px}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg-2);font-size:12px;color:var(--fg-2)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(52,211,153,0.15)}
+
+  h2{font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin:30px 0 12px;font-weight:600}
+  h3{font-size:14px;color:var(--fg);margin:18px 0 6px;font-weight:600}
+  p{margin:6px 0}
+  section.card{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
+
+  .hooks{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .hook{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+  .hook .name{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:var(--accent);margin-bottom:4px}
+  .hook .matcher{font-size:11.5px;color:var(--fg-3);margin-bottom:10px}
+  .hook .fires{font-size:13px;color:var(--fg)}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--fg-3);font-weight:600;font-size:11.5px;letter-spacing:0.06em;text-transform:uppercase}
+  td.check{color:var(--ok);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;width:60px}
+
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .kv{display:flex;justify-content:space-between;gap:14px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px}
+  .kv:last-child{border-bottom:none}
+  .kv .k{color:var(--fg-3)}
+  .kv .v{color:var(--fg);text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
+
+  .flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:10px;padding:8px 0 4px}
+  .node{background:var(--bg-3);border:1px solid var(--line);border-radius:8px;padding:10px 12px;text-align:center;font-size:12.5px}
+  .node strong{display:block;color:var(--accent);font-size:11.5px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:4px;font-weight:600}
+  .arrow{color:var(--fg-3);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+  .warn{margin-top:14px;padding:10px 12px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:8px;font-size:12.5px;color:#fde68a}
+  .warn strong{color:var(--warn)}
+
+  ol.steps{counter-reset:s;list-style:none;padding:0;margin:0}
+  ol.steps > li{counter-increment:s;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px 14px 50px;margin-bottom:10px;position:relative}
+  ol.steps > li::before{content:counter(s);position:absolute;left:14px;top:14px;width:26px;height:26px;border-radius:50%;background:var(--bg-3);border:1px solid var(--line);color:var(--accent);font:600 12px/26px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;text-align:center}
+  ol.steps > li h3{margin-top:0}
+
+  footer{margin-top:36px;color:var(--fg-3);font-size:12px;text-align:center}
+
+  @media (max-width:680px){
+    .hooks{grid-template-columns:1fr}
+    .grid-2{grid-template-columns:1fr}
+    .flow{grid-template-columns:1fr;text-align:center}
+    .arrow{transform:rotate(90deg)}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Claude Code → Phone Ping</h1>
+      <div class="sub">Free phone push notifications whenever Claude needs your attention</div>
+    </div>
+    <span class="badge"><span class="dot"></span> ~5 min setup · zero cost</span>
+  </header>
+
+  <h2>The idea</h2>
+  <section class="card">
+    <p>Kick off a long task in Claude Code, walk away, get a buzz on your phone the moment Claude needs you back. No paid services, no API keys — one PowerShell script, three hook entries in <code>settings.json</code>, one free mobile app (<a href="https://ntfy.sh/" target="_blank" rel="noopener">ntfy.sh</a>).</p>
+  </section>
+
+  <h2>Flow</h2>
+  <section class="card">
+    <div class="flow">
+      <div class="node"><strong>Trigger</strong>turn-end · permission prompt · AskUserQuestion</div>
+      <div class="arrow">→</div>
+      <div class="node"><strong>Hook</strong>ping_notify.ps1<br><span style="color:var(--fg-3);font-size:11.5px">Invoke-WebRequest POST</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><strong>Delivery</strong>ntfy.sh/<br>&lt;your-topic&gt;</div>
+    </div>
+  </section>
+
+  <h2>The three hooks</h2>
+  <div class="hooks">
+    <div class="hook">
+      <div class="name">Stop</div>
+      <div class="matcher">matcher: (empty)</div>
+      <div class="fires">End of every Claude turn — most frequent ping.</div>
+    </div>
+    <div class="hook">
+      <div class="name">Notification</div>
+      <div class="matcher">matcher: (empty)</div>
+      <div class="fires">Permission prompts (Bash, PowerShell, file writes) and idle timeouts.</div>
+    </div>
+    <div class="hook">
+      <div class="name">PreToolUse</div>
+      <div class="matcher">matcher: AskUserQuestion</div>
+      <div class="fires">Every multiple-choice question. One ping per call regardless of sub-question count.</div>
+    </div>
+  </div>
+
+  <div class="warn" style="margin-top:14px"><strong>Why three?</strong> The <code>Notification</code> hook covers permission prompts and idle states, but <code>AskUserQuestion</code> is a tool call, not a notification event — it sneaks past <code>Notification</code> entirely. The <code>PreToolUse</code> entry catches it. Skip this and you'll miss every multiple-choice prompt.</div>
+
+  <h2>Setup</h2>
+  <ol class="steps">
+    <li>
+      <h3>Install the ntfy mobile app</h3>
+      <p style="color:var(--fg-2)"><a href="https://ntfy.sh/" target="_blank" rel="noopener">ntfy by binwiederhier</a> on Android or iOS. Free, no account. Open the app and <em>Subscribe to a topic</em>. Topic names on ntfy.sh are public namespace — use a random suffix so it's not guessable (e.g. <code>my-claude-4829</code>).</p>
+    </li>
+    <li>
+      <h3>Drop the hook script in place</h3>
+      <p style="color:var(--fg-2)">Copy <code>ping_notify.ps1</code> to <code>~/.claude/hooks/ping_notify.ps1</code>. Edit the URL line to your topic:</p>
+      <pre><code>-Uri "https://ntfy.sh/YOUR-TOPIC-HERE"</code></pre>
+    </li>
+    <li>
+      <h3>Enable the kill switch flag</h3>
+      <p style="color:var(--fg-2)">The hook script no-ops unless this file exists. This is your on/off control.</p>
+      <pre><code>New-Item -ItemType File "$env:USERPROFILE\.claude\ping_enabled" -Force</code></pre>
+    </li>
+    <li>
+      <h3>Wire the hooks in settings.json</h3>
+      <p style="color:var(--fg-2)">Merge into <code>~/.claude/settings.json</code> under the <code>"hooks"</code> key (replace <code>&lt;USER&gt;</code> with your username):</p>
+<pre><code>{
+  "hooks": {
+    "Stop": [{
+      "matcher": "",
+      "hooks": [{ "type": "command", "command": "powershell -NonInteractive -File \"C:\\Users\\&lt;USER&gt;\\.claude\\hooks\\ping_notify.ps1\"" }]
+    }],
+    "Notification": [{
+      "matcher": "",
+      "hooks": [{ "type": "command", "command": "powershell -NonInteractive -File \"C:\\Users\\&lt;USER&gt;\\.claude\\hooks\\ping_notify.ps1\"" }]
+    }],
+    "PreToolUse": [{
+      "matcher": "AskUserQuestion",
+      "hooks": [{ "type": "command", "command": "powershell -NonInteractive -File \"C:\\Users\\&lt;USER&gt;\\.claude\\hooks\\ping_notify.ps1\"" }]
+    }]
+  }
+}</code></pre>
+    </li>
+    <li>
+      <h3>Test</h3>
+      <p style="color:var(--fg-2)">Start a Claude Code session. Run <code>whoami</code> (or any command not in your allowlist). Phone buzzes. Let the turn end. Phone buzzes again. Done.</p>
+    </li>
+  </ol>
+
+  <h2>Verified scenarios <span style="color:var(--fg-3);text-transform:none;letter-spacing:0;font-weight:400;font-size:12px">(every path tested 2026-05-13)</span></h2>
+  <section class="card" style="padding:6px 14px">
+    <table>
+      <thead>
+        <tr><th>Scenario</th><th>Hook</th><th></th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Bash command needing permission</td><td><code>Notification</code></td><td class="check">✓</td></tr>
+        <tr><td>PowerShell command needing permission</td><td><code>Notification</code></td><td class="check">✓</td></tr>
+        <tr><td>AskUserQuestion — single-select</td><td><code>PreToolUse</code></td><td class="check">✓</td></tr>
+        <tr><td>AskUserQuestion — multi-select</td><td><code>PreToolUse</code></td><td class="check">✓</td></tr>
+        <tr><td>AskUserQuestion — multi-question (1 ping)</td><td><code>PreToolUse</code></td><td class="check">✓</td></tr>
+        <tr><td>Turn end</td><td><code>Stop</code></td><td class="check">✓</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <h2>Toggle on / off</h2>
+  <div class="grid-2">
+    <section class="card">
+      <div style="color:var(--fg-3);font-size:11.5px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px;font-weight:600">Turn OFF</div>
+      <pre><code>Remove-Item "$env:USERPROFILE\.claude\ping_enabled"</code></pre>
+    </section>
+    <section class="card">
+      <div style="color:var(--fg-3);font-size:11.5px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px;font-weight:600">Turn ON</div>
+      <pre><code>New-Item -ItemType File "$env:USERPROFILE\.claude\ping_enabled" -Force</code></pre>
+    </section>
+  </div>
+  <p style="color:var(--fg-2);font-size:12.5px;margin-top:10px"><code>toggle_ping.ps1</code> (in this folder) flips the state in one call.</p>
+
+  <h2>Troubleshooting</h2>
+  <section class="card">
+    <h3 style="margin-top:0">No notifications at all</h3>
+    <p style="color:var(--fg-2);font-size:13px">Confirm the ntfy app is subscribed to the exact topic name (case-sensitive). Confirm <code>~/.claude/ping_enabled</code> exists. Run the script manually — it should silently succeed: <code>powershell -File ~/.claude/hooks/ping_notify.ps1</code>.</p>
+
+    <h3>SSL error 35 / cert errors</h3>
+    <p style="color:var(--fg-2);font-size:13px">Don't use <code>curl</code> on Windows in Bash/Git Bash context — stale system certs cause SSL handshake failures. The script uses PowerShell's <code>Invoke-WebRequest</code> for this reason. Don't swap it back.</p>
+
+    <h3>Turn-end pings work but AskUserQuestion doesn't</h3>
+    <p style="color:var(--fg-2);font-size:13px">The <code>PreToolUse</code> matcher must be exactly <code>AskUserQuestion</code> (case-sensitive). Check <code>settings.json</code>.</p>
+
+    <h3>Turn-end pings work but permission prompts don't</h3>
+    <p style="color:var(--fg-2);font-size:13px">The <code>Notification</code> hook is either missing or has a non-empty matcher. Matcher should be <code>""</code> to catch all notification events.</p>
+  </section>
+
+  <h2>Why not just desktop notifications?</h2>
+  <section class="card" style="color:var(--fg-2);font-size:13px">
+    Desktop notifications only work when your laptop is open and unlocked. Phone push works when you've walked away from the desk — which is the actual use case. Kick off a long task, go make coffee, get a buzz when Claude needs you back.
+  </section>
+
+  <h2>Companion file</h2>
+  <section class="card" style="font-size:13px;color:var(--fg-2)">
+    AI-readable twin: <a href="./workflow.md"><code>workflow.md</code></a>. Same content, optimized for being dropped into a memory system or pasted into a chat. Pattern: any non-trivial Claude Code workflow ships both an AI .md and a human .html.
+  </section>
+
+  <footer>Open-source · public domain · last updated 2026-05-13</footer>
+</div>
+</body>
+</html>
