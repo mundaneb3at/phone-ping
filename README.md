@@ -1,2 +1,5 @@
 # phone-ping
-Claude - Phone Ping Mechanizm
+Claude - Phone Ping Mechanism
+
+- [Setup guide → workflow.md](./workflow.md)
+- [Visual dashboard → workflow.html](./workflow.html)
