@@ -28,12 +28,29 @@ if ($raw) {
     } catch { }
 }
 
-# --- event -> tailored message ---
-switch ($evt) {
-    'PreToolUse'   { $title = 'Claude has a question'; $body = 'Claude is asking you to choose'; $tag = 'question' }
-    'Notification' { $title = 'Claude is waiting';     $body = 'Idle 60s - Claude needs you';    $tag = 'hourglass' }
-    default        { $title = 'Claude needs input';    $body = 'Your turn';                       $tag = 'robot' }
+# --- event -> tailored message (config-driven; built-in fallback) ---
+# Edit ~/.claude/ping_messages.json to customize (the /ping-config skill does this).
+# If the file is missing or invalid, these defaults are used.
+$msg = @{
+    PreToolUse   = @{ title = 'Claude has a question'; body = 'Claude is asking you to choose'; tag = 'question' }
+    Notification = @{ title = 'Claude is waiting';     body = 'Idle 60s - Claude needs you';    tag = 'hourglass' }
+    default      = @{ title = 'Claude needs input';    body = 'Your turn';                       tag = 'robot' }
 }
+$cfg = "$env:USERPROFILE\.claude\ping_messages.json"
+if (Test-Path $cfg) {
+    try {
+        $j = Get-Content $cfg -Raw | ConvertFrom-Json
+        foreach ($k in @('PreToolUse','Notification','default')) {
+            if ($j.$k) {
+                if ($j.$k.title) { $msg[$k].title = $j.$k.title }
+                if ($j.$k.body)  { $msg[$k].body  = $j.$k.body }
+                if ($j.$k.tag)   { $msg[$k].tag   = $j.$k.tag }
+            }
+        }
+    } catch { }
+}
+$m     = if ($msg.ContainsKey($evt)) { $msg[$evt] } else { $msg['default'] }
+$title = $m.title; $body = $m.body; $tag = $m.tag
 
 # --- per-session debounce (kills same-instant duplicates) ---
 $key   = ($sid -replace '[^\w-]', '_')

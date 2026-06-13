@@ -50,8 +50,9 @@ Two hook entries in `~/.claude/settings.json` invoke the same PowerShell script 
 ├── ping_enabled           # 0-byte flag file; presence = ON, absence = OFF
 ├── ping_check.ps1         # diagnostic: checks wiring + sends test pings
 ├── toggle_ping.ps1        # convenience script to flip the flag
+├── ping_messages.json     # message text per event (title/body/tag); ping_notify.ps1 reads it
 └── hooks/
-    └── ping_notify.ps1    # reads stdin event, tailors message, debounces, POSTs to ntfy.sh
+    └── ping_notify.ps1    # reads stdin event, reads ping_messages.json, debounces, POSTs to ntfy.sh
 ```
 
 ## Hook script (verbatim)
@@ -76,12 +77,19 @@ if ($raw) {
     } catch { }
 }
 
-# event -> tailored message
-switch ($evt) {
-    'PreToolUse'   { $title = 'Claude has a question'; $body = 'Claude is asking you to choose'; $tag = 'question' }
-    'Notification' { $title = 'Claude is waiting';     $body = 'Idle 60s - Claude needs you';    $tag = 'hourglass' }
-    default        { $title = 'Claude needs input';    $body = 'Your turn';                       $tag = 'robot' }
+# event -> message (read from ping_messages.json, with built-in fallback)
+$msg = @{
+    PreToolUse   = @{ title='Claude has a question'; body='Claude is asking you to choose'; tag='question' }
+    Notification = @{ title='Claude is waiting';     body='Idle 60s - Claude needs you';    tag='hourglass' }
+    default      = @{ title='Claude needs input';    body='Your turn';                       tag='robot' }
 }
+$cfg = "$env:USERPROFILE\.claude\ping_messages.json"
+if (Test-Path $cfg) { try { $j = Get-Content $cfg -Raw | ConvertFrom-Json
+    foreach ($k in 'PreToolUse','Notification','default') { if ($j.$k) {
+        if ($j.$k.title){$msg[$k].title=$j.$k.title}; if ($j.$k.body){$msg[$k].body=$j.$k.body}; if ($j.$k.tag){$msg[$k].tag=$j.$k.tag} } }
+} catch { } }
+$m = if ($msg.ContainsKey($evt)) { $msg[$evt] } else { $msg['default'] }
+$title = $m.title; $body = $m.body; $tag = $m.tag
 
 # per-session debounce
 $key   = ($sid -replace '[^\w-]', '_')
@@ -123,6 +131,16 @@ The `try/catch` + `-TimeoutSec 5` keep a slow/offline ntfy from ever stalling a 
 ```
 
 If you already have other `PreToolUse` entries (linting, guard scripts), add the `AskUserQuestion` entry as an additional object in the `PreToolUse` array, NOT a replacement.
+
+## Customizing the messages
+
+The wording of each ping lives in `ping_messages.json`, not hard-coded in the script. Edit the `title` (phone heading), `body` (line text), and `tag` (ntfy emoji name) per event:
+
+- `PreToolUse` - the question ping
+- `Notification` - the idle-60s ping
+- `default` - any other event
+
+`ping_notify.ps1` reads this file on every fire (no restart needed) and falls back to built-in defaults if it is missing or invalid, so a bad edit can never silence your pings.
 
 ## Verify
 
