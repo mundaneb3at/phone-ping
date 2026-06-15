@@ -65,9 +65,16 @@ if (Test-Path $stamp) {
 Set-Content -Path $stamp -Value $now -NoNewline
 
 # --- fire the push ---
+# Force TLS 1.2: when spawned -NonInteractive (no profile), Win PowerShell 5.1 can
+# default to a TLS version ntfy.sh rejects -> the POST fails silently. (2026-06-14 fix)
 try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -Method POST -Uri "https://ntfy.sh/$topic" `
         -Body $body `
         -Headers @{ Title = $title; Priority = 'default'; Tags = $tag } `
         -UseBasicParsing -TimeoutSec 5 | Out-Null
-} catch { }
+} catch {
+    # Log instead of swallowing, so a failed ping is diagnosable next time.
+    "$([DateTime]::Now.ToString('s')) ping POST failed: $($_.Exception.Message)" |
+        Out-File "$env:TEMP\claude_ping_error.log" -Append -Encoding utf8
+}
