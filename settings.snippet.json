@@ -1,7 +1,7 @@
 {
-  "_comment": "Attention-only phone-ping. Merge these TWO hook entries into your ~/.claude/settings.json under the top-level 'hooks' key. Replace <USER> with your Windows username. The per-turn 'Stop' hook is intentionally OMITTED so your phone does NOT buzz on every turn-end - you get pinged only when Claude asks a question (PreToolUse/AskUserQuestion) or has been idle 60s waiting on you (Notification). To ALSO ping on every turn-end, add a 'Stop' entry identical to the Notification one below. If you already have other PreToolUse entries (linting, guards), add the AskUserQuestion object as an ADDITIONAL item in the PreToolUse array - do not overwrite existing entries. Note: in bypassPermissions mode the Notification hook only fires on the idle-60s case (there are no permission prompts).",
+  "_comment": "phone-ping: one push per prompt-cycle, only for interactive Desktop sessions. Merge these FOUR hook entries into your ~/.claude/settings.json under the top-level 'hooks' key. Replace <USER> with your Windows username. All four call the same ping_notify.ps1, which dispatches on the hook event: UserPromptSubmit resets the per-cycle gate (never pings) - PreToolUse/AskUserQuestion -> 'Claude has a question' - Notification/idle_prompt -> 'Claude is waiting' - Stop -> 'Claude is done'. The script self-gates: it skips headless/scheduled/SDK runs (anything launched from a Temp dir or a non-Desktop entrypoint) and sends at most one ping per prompt-cycle per session. If you already have other PreToolUse/UserPromptSubmit/Stop entries (linting, guards), ADD these objects to those arrays - do not overwrite them. The Notification matcher 'idle_prompt' targets the idle case; ping_notify.ps1 also filters notification_type internally, so an empty matcher ('') works too.",
   "hooks": {
-    "Notification": [
+    "UserPromptSubmit": [
       {
         "matcher": "",
         "hooks": [
@@ -15,6 +15,28 @@
     "PreToolUse": [
       {
         "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NonInteractive -File \"C:\\Users\\<USER>\\.claude\\hooks\\ping_notify.ps1\""
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "idle_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NonInteractive -File \"C:\\Users\\<USER>\\.claude\\hooks\\ping_notify.ps1\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
         "hooks": [
           {
             "type": "command",

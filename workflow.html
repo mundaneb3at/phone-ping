@@ -40,15 +40,13 @@
   p{margin:6px 0}
   section.card{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
 
-  .hooks{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .hooks{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
   .hook{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
   .hook .name{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:var(--accent);margin-bottom:4px}
   .hook .matcher{font-size:11.5px;color:var(--fg-3);margin-bottom:10px}
   .hook .fires{font-size:13px;color:var(--fg)}
   .hook .msg{margin-top:8px;font-size:12px;color:var(--ok);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-  .hook.removed{opacity:0.55;border-style:dashed}
-  .hook.removed .name{color:var(--danger);text-decoration:line-through}
-  .hook.removed .tag{display:inline-block;margin-top:8px;font-size:11px;color:var(--danger);border:1px solid rgba(248,113,113,0.4);border-radius:6px;padding:2px 6px}
+  .hook .msg.muted{color:var(--fg-3)}
 
   table{width:100%;border-collapse:collapse;font-size:13.5px}
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -89,23 +87,23 @@
   <header>
     <div>
       <h1>Claude Code → Phone Ping</h1>
-      <div class="sub">A free phone buzz — only when Claude is actually waiting on you</div>
+      <div class="sub">One push notification per prompt-cycle — interactive Desktop sessions only</div>
     </div>
-    <span class="badge"><span class="dot"></span> attention-only · zero cost</span>
+    <span class="badge"><span class="dot"></span> one ping per cycle · zero cost</span>
   </header>
 
   <h2>The idea</h2>
   <section class="card">
-    <p>Kick off a long task in Claude Code, walk away, and get a buzz on your phone <em>only</em> when Claude genuinely needs you — when it asks a question, or when it has sat idle for 60s after finishing. No buzz on every back-and-forth turn. No paid services, no API keys: one PowerShell script, two hook entries in <code>settings.json</code>, one free mobile app (<a href="https://ntfy.sh/" target="_blank" rel="noopener">ntfy.sh</a>).</p>
-    <div class="good"><strong>Attention-only redesign (2026-06-13).</strong> The earlier version pinged on <em>every</em> turn-end and buzzed twice for a single question. Now: respond within 60s and you get nothing; step away and you get exactly one ping, with a message that says why.</div>
+    <p>Start a long task in Claude Code and receive a push notification when it needs attention — when it asks a question, goes idle, or finishes a turn. At most <em>one</em> ping per prompt-cycle, with a message naming which event fired. No paid services, no API keys: one PowerShell script, four hook entries in <code>settings.json</code>, one free mobile app (<a href="https://ntfy.sh/" target="_blank" rel="noopener">ntfy.sh</a>).</p>
+    <div class="good"><strong>Interactive-only.</strong> Headless, scheduled, and SDK runs (<code>claude -p</code>, cron jobs, background scheduled tasks) fire the same hooks — but they're gated out, so automation never notifies your phone. Only interactive Desktop sessions ping.</div>
   </section>
 
   <h2>Flow</h2>
   <section class="card">
     <div class="flow">
-      <div class="node"><strong>Trigger</strong>a question · idle 60s</div>
+      <div class="node"><strong>Trigger</strong>question · idle · done</div>
       <div class="arrow">→</div>
-      <div class="node"><strong>Hook</strong>ping_notify.ps1<br><span style="color:var(--fg-3);font-size:11.5px">reads event from stdin → POST</span></div>
+      <div class="node"><strong>Hook</strong>ping_notify.ps1<br><span style="color:var(--fg-3);font-size:11.5px">stdin event → gate → POST</span></div>
       <div class="arrow">→</div>
       <div class="node"><strong>Delivery</strong>ntfy.sh/<br>&lt;your-topic&gt;</div>
     </div>
@@ -114,28 +112,34 @@
   <h2>The hooks</h2>
   <div class="hooks">
     <div class="hook">
+      <div class="name">UserPromptSubmit</div>
+      <div class="matcher">matcher: (empty)</div>
+      <div class="fires">You send a prompt. Resets the per-cycle gate so the next event can ping.</div>
+      <div class="msg muted">(no ping — gate reset)</div>
+    </div>
+    <div class="hook">
       <div class="name">PreToolUse</div>
       <div class="matcher">matcher: AskUserQuestion</div>
-      <div class="fires">Claude asks a multiple-choice question. One ping per call.</div>
+      <div class="fires">Claude asks a multiple-choice question.</div>
       <div class="msg">"Claude has a question"</div>
     </div>
     <div class="hook">
       <div class="name">Notification</div>
-      <div class="matcher">matcher: (empty)</div>
-      <div class="fires">Idle 60s after Claude finished (the "you walked away" signal).</div>
+      <div class="matcher">matcher: idle_prompt</div>
+      <div class="fires">Claude went idle waiting for user input.</div>
       <div class="msg">"Claude is waiting"</div>
     </div>
-    <div class="hook removed">
+    <div class="hook">
       <div class="name">Stop</div>
       <div class="matcher">matcher: (empty)</div>
-      <div class="fires">Fired at the end of every turn.</div>
-      <div class="tag">removed — was the noise</div>
+      <div class="fires">Claude finished a turn.</div>
+      <div class="msg">"Claude is done"</div>
     </div>
   </div>
 
-  <div class="warn" style="margin-top:14px"><strong>Why drop Stop?</strong> <code>Stop</code> fires at the end of <em>every</em> assistant turn, so it buzzed the phone during normal back-and-forth — and a single <code>AskUserQuestion</code> produced two pings (one from <code>PreToolUse</code> before the question, one from <code>Stop</code> at turn-end). With <code>Stop</code> gone, the idle-60s <code>Notification</code> covers the "your turn" case only when you're actually away. Want a buzz on every turn back? Add a <code>Stop</code> entry identical to the <code>Notification</code> one.</div>
+  <div class="warn" style="margin-top:14px"><strong>One ping per cycle.</strong> The first of those events to fire in a prompt-cycle sends; the rest are suppressed until your next prompt resets the gate. The marker is namespaced by <code>session_id</code> (concurrent chats don't suppress each other), self-expires after 30 min, and is written only <em>after</em> a successful POST — so a failed send never silences the next real ping.</div>
 
-  <div class="warn" style="margin-top:14px"><strong>Why these two?</strong> <code>AskUserQuestion</code> is a tool call, not a notification event — it slips past <code>Notification</code> entirely, so the <code>PreToolUse</code> entry catches it. And in <code>bypassPermissions</code> mode there are no permission prompts, so <code>Notification</code> only ever fires on the idle-60s case — which is exactly what we want.</div>
+  <div class="warn" style="margin-top:14px"><strong>Why interactive-only?</strong> <code>Stop</code> and the other events also fire for <code>claude -p</code>, cron jobs, and other background runs. Two gates drop those: <strong>(a)</strong> any run whose cwd is a <code>…\Temp\…</code> dir is skipped (the reliable gate), and <strong>(b)</strong> only the Desktop app's entrypoint pings — and (b) is <em>fail-open</em>, so a hook subprocess that didn't inherit the env var can never silently drop <em>all</em> pings.</div>
 
   <h2>Setup</h2>
   <ol class="steps">
@@ -147,7 +151,7 @@
       <h3>Drop the hook script in place</h3>
       <p style="color:var(--fg-2)">Copy <code>ping_notify.ps1</code> to <code>~/.claude/hooks/ping_notify.ps1</code>. Set your topic near the top:</p>
       <pre><code>$topic = '&lt;YOUR-TOPIC&gt;'   # e.g. my-claude-4829</code></pre>
-      <p style="color:var(--fg-2)">The script reads the hook event from stdin to pick the message and debounce duplicates — no other edits needed.</p>
+      <p style="color:var(--fg-2)">The script reads the hook event from stdin to pick the message, gate background runs, and debounce per cycle — no other edits needed.</p>
     </li>
     <li>
       <h3>Enable the kill-switch flag</h3>
@@ -155,42 +159,53 @@
       <pre><code>New-Item -ItemType File "$env:USERPROFILE\.claude\ping_enabled" -Force</code></pre>
     </li>
     <li>
-      <h3>Wire the two hooks in settings.json</h3>
+      <h3>Wire the four hooks in settings.json</h3>
       <p style="color:var(--fg-2)">Merge into <code>~/.claude/settings.json</code> under the <code>"hooks"</code> key (replace <code>&lt;USER&gt;</code> with your username). Full copy in <code>settings.snippet.json</code>:</p>
 <pre><code>{
   "hooks": {
-    "Notification": [{
+    "UserPromptSubmit": [{
       "matcher": "",
       "hooks": [{ "type": "command", "command": "powershell -NonInteractive -File \"C:\\Users\\&lt;USER&gt;\\.claude\\hooks\\ping_notify.ps1\"" }]
     }],
     "PreToolUse": [{
       "matcher": "AskUserQuestion",
       "hooks": [{ "type": "command", "command": "powershell -NonInteractive -File \"C:\\Users\\&lt;USER&gt;\\.claude\\hooks\\ping_notify.ps1\"" }]
+    }],
+    "Notification": [{
+      "matcher": "idle_prompt",
+      "hooks": [{ "type": "command", "command": "powershell -NonInteractive -File \"C:\\Users\\&lt;USER&gt;\\.claude\\hooks\\ping_notify.ps1\"" }]
+    }],
+    "Stop": [{
+      "matcher": "",
+      "hooks": [{ "type": "command", "command": "powershell -NonInteractive -File \"C:\\Users\\&lt;USER&gt;\\.claude\\hooks\\ping_notify.ps1\"" }]
     }]
   }
 }</code></pre>
+      <p style="color:var(--fg-2)">If you already have other <code>PreToolUse</code> / <code>UserPromptSubmit</code> / <code>Stop</code> entries, add these as additional objects in those arrays, not replacements.</p>
     </li>
     <li>
       <h3>Verify</h3>
-      <p style="color:var(--fg-2)">Run the diagnostic — it checks the wiring and sends two test pings:</p>
+      <p style="color:var(--fg-2)">Run the diagnostic — it checks the four-hook wiring and POSTs three test pings:</p>
       <pre><code>powershell -NonInteractive -File "$env:USERPROFILE\.claude\ping_check.ps1"</code></pre>
-      <p style="color:var(--fg-2)">Expect 2 phone notifications: "Claude has a question", then "Claude is waiting". Then start a new session for the wiring to load.</p>
+      <p style="color:var(--fg-2)">Expect 3 phone notifications: "Claude has a question", "Claude is waiting", "Claude is done". Then start a new session for the wiring to load.</p>
     </li>
   </ol>
 
-  <h2>Verified behaviour <span style="color:var(--fg-3);text-transform:none;letter-spacing:0;font-weight:400;font-size:12px">(attention-only, 2026-06-13)</span></h2>
+  <h2>Designed behaviour</h2>
   <section class="card" style="padding:6px 14px">
     <table>
       <thead>
         <tr><th>Scenario</th><th>Result</th><th>Pings</th></tr>
       </thead>
       <tbody>
-        <tr><td>AskUserQuestion (single / multi / multi-question)</td><td><code>PreToolUse</code> → "Claude has a question"</td><td class="check">1</td></tr>
-        <tr><td>Claude finishes, you stay idle 60s</td><td><code>Notification</code> → "Claude is waiting"</td><td class="check">1</td></tr>
-        <tr><td>Turn ends while you're actively typing</td><td>no hook fires</td><td class="none">0</td></tr>
-        <tr><td>Two hooks fire in the same instant</td><td>collapsed by the 10s per-session debounce</td><td class="check">1</td></tr>
+        <tr><td>AskUserQuestion (first event in the cycle)</td><td><code>PreToolUse</code> → "Claude has a question"</td><td class="check">1</td></tr>
+        <tr><td>Claude goes idle waiting on you</td><td><code>Notification</code>/<code>idle_prompt</code> → "Claude is waiting"</td><td class="check">1</td></tr>
+        <tr><td>Claude finishes a turn</td><td><code>Stop</code> → "Claude is done"</td><td class="check">1</td></tr>
+        <tr><td>Two events fire in the same cycle</td><td>collapsed by the per-cycle marker</td><td class="check">1</td></tr>
+        <tr><td>Headless / scheduled / SDK run (<code>claude -p</code>, cron, Temp-dir)</td><td>gated out</td><td class="none">0</td></tr>
       </tbody>
     </table>
+    <div class="warn"><strong>Designed, not yet receipt-verified.</strong> A green <code>ping_check</code> proves the wiring and that ntfy accepted the POST (HTTP 2xx) — not that the notification surfaced on your phone. Confirm receipt on the device for a real, natural trigger before trusting it (iOS routes ntfy through APNs; check the app subscription, notification permissions, and any Focus / Scheduled-Summary batching).</div>
   </section>
 
   <h2>Toggle on / off</h2>
@@ -209,29 +224,29 @@
   <h2>Troubleshooting</h2>
   <section class="card">
     <h3 style="margin-top:0">No notifications at all</h3>
-    <p style="color:var(--fg-2);font-size:13px">Confirm the ntfy app is subscribed to the exact topic name (case-sensitive) and that <code>~/.claude/ping_enabled</code> exists. Run <code>ping_check.ps1</code> — it pinpoints which layer is missing.</p>
+    <p style="color:var(--fg-2);font-size:13px">Confirm the ntfy app is subscribed to the exact topic name (case-sensitive) and that <code>~/.claude/ping_enabled</code> exists. Run <code>ping_check.ps1</code> — it pinpoints which layer is missing and writes any send failure to <code>%TEMP%\claude_ping_error.log</code>.</p>
 
-    <h3>SSL error 35 / cert errors</h3>
-    <p style="color:var(--fg-2);font-size:13px">Don't use <code>curl</code> on Windows in a Bash/Git Bash context — stale system certs cause SSL handshake failures. The script uses PowerShell's <code>Invoke-WebRequest</code> for this reason. Don't swap it back.</p>
+    <h3>Pings sent (200 / marker) but nothing on the phone</h3>
+    <p style="color:var(--fg-2);font-size:13px">Delivery, not send, is the problem. On iOS, ntfy routes through Apple APNs — check the app is subscribed to the right topic, notifications are allowed, and no Focus mode or Scheduled Summary is batching them.</p>
 
-    <h3>Idle reminder fires repeatedly</h3>
-    <p style="color:var(--fg-2);font-size:13px">If <code>Notification</code> re-fires every 60s while you stay idle, raise <code>$debounceSec</code> in the script so reminders don't stack.</p>
+    <h3>Transport / TLS</h3>
+    <p style="color:var(--fg-2);font-size:13px">The script POSTs with the Windows System32 <code>curl.exe</code> (Schannel TLS, real exit codes — so failures are logged, not swallowed). Don't swap it back to <code>Invoke-WebRequest</code> (which hid a TLS silent-fail), and don't point it at the MSYS / Git-Bash <code>curl</code> (stale-cert SSL handshake issues).</p>
 
-    <h3>I actually want a buzz every turn</h3>
-    <p style="color:var(--fg-2);font-size:13px">Add a <code>Stop</code> entry identical to the <code>Notification</code> one. The script will label it "Claude needs input".</p>
+    <h3>Automation is buzzing my phone</h3>
+    <p style="color:var(--fg-2);font-size:13px">A headless/cron run slipped past the gates. Confirm it runs from a <code>…\Temp\…</code> cwd (gate a) or sets a non-Desktop <code>CLAUDE_CODE_ENTRYPOINT</code> (gate b). Keep gate (b) fail-open.</p>
   </section>
 
   <h2>Why not just desktop notifications?</h2>
   <section class="card" style="color:var(--fg-2);font-size:13px">
-    Desktop notifications only work when your laptop is open and unlocked. Phone push works when you've walked away from the desk — which is the actual use case. Kick off a long task, go make coffee, get one buzz when Claude needs you back.
+    Desktop notifications only work when the machine is open and unlocked. Phone push reaches you after you've stepped away from the desk — the actual use case. Start a long task, step away, and receive one notification when Claude needs attention.
   </section>
 
   <h2>Companion file</h2>
   <section class="card" style="font-size:13px;color:var(--fg-2)">
-    AI-readable twin: <a href="./workflow.md"><code>workflow.md</code></a>. Same content, optimized for being dropped into a memory system or pasted into a chat. Pattern: any non-trivial Claude Code workflow ships both an AI <code>.md</code> and a human <code>.html</code>.
+    AI-readable twin: <a href="./workflow.md"><code>workflow.md</code></a>. Same content, formatted for pasting into a chat or memory system.
   </section>
 
-  <footer>Open-source · public domain · last updated 2026-06-13</footer>
+  <footer>Open-source · public domain · last updated 2026-06-21</footer>
 </div>
 </body>
 </html>

@@ -1,5 +1,5 @@
 {
-  "_comment": "Customizes the phone-ping hook messages. ping_notify.ps1 reads this; if the file is missing or invalid it falls back to built-in defaults (so a bad edit can't silence pings). Keys: PreToolUse = the question ping, Notification = the idle-60s ping, default = any other event. title = phone heading, body = line text, tag = ntfy emoji name (e.g. question, hourglass, robot, bell, warning, white_check_mark).",
+  "_comment": "LEGACY - not read by the current ping_notify.ps1, which defines its messages inline in its $msg map. Kept for reference only. To customize a ping's title or tag, edit the $msg hashtable in ping_notify.ps1 directly.",
   "PreToolUse":   { "title": "Claude has a question", "body": "Claude is asking you to choose", "tag": "question" },
   "Notification": { "title": "Claude is waiting",     "body": "Idle 60s - Claude needs you",    "tag": "hourglass" },
   "default":      { "title": "Claude needs input",    "body": "Your turn",                        "tag": "robot" }
