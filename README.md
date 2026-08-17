@@ -15,6 +15,10 @@ Only **interactive Desktop sessions** ping. Headless / scheduled / SDK runs (`cl
 
 > **Topic security:** ntfy.sh topics are a public namespace — anyone who knows your topic name can read *and* post to it. Use a random, unguessable string (e.g. `my-claude-f3a8`) and never commit the literal topic to a public repo. The notification body also includes your working-directory's folder name; if that could be sensitive, replace `$proj` in `ping_notify.ps1` with a fixed string.
 
+## Requirements
+
+Windows, PowerShell 5.1+, `curl.exe` (bundled since Windows 10 1803). No PS7-only syntax is used.
+
 ## Files
 
 | File | Purpose |
