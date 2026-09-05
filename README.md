@@ -19,6 +19,27 @@ Only **interactive Desktop sessions** ping. Headless / scheduled / SDK runs (`cl
 
 Windows, PowerShell 5.1+, `curl.exe` (bundled since Windows 10 1803). No PS7-only syntax is used.
 
+## Install
+
+1. Copy the scripts into place:
+   ```powershell
+   Copy-Item ping_notify.ps1 "$env:USERPROFILE\.claude\hooks\ping_notify.ps1"
+   Copy-Item ping_check.ps1  "$env:USERPROFILE\.claude\ping_check.ps1"
+   Copy-Item toggle_ping.ps1 "$env:USERPROFILE\.claude\toggle_ping.ps1"
+   ```
+2. Edit `~/.claude/hooks/ping_notify.ps1` and replace the `$topic = '<YOUR-TOPIC>'` placeholder with your own random, unguessable ntfy topic name.
+3. Merge the four hook entries from `settings.snippet.json` into `~/.claude/settings.json` under `hooks` (replace `<USER>` with your Windows username; if you already have other `PreToolUse`/`UserPromptSubmit`/`Stop` entries, add these as extra array items, don't overwrite them).
+4. Turn notifications on:
+   ```powershell
+   powershell -NoProfile -File "$env:USERPROFILE\.claude\toggle_ping.ps1"
+   ```
+5. In the [ntfy](https://ntfy.sh) mobile app, subscribe to your topic name.
+6. Start a new Claude Code session (hook wiring only takes effect on new sessions), then verify:
+   ```powershell
+   powershell -NoProfile -File "$env:USERPROFILE\.claude\ping_check.ps1"
+   ```
+   Expect 3 phone notifications: "Claude has a question", "Claude is waiting", "Claude is done".
+
 ## Files
 
 | File | Purpose |
