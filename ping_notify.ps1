@@ -12,8 +12,10 @@
 # scheduled jobs typically run from %TEMP%); (b) catches other non-Desktop launches.
 #
 # MODEL: one ping per prompt-cycle per session (session_id-namespaced marker,
-# cleared by UserPromptSubmit, 30-min self-expiry). The notification BODY just
-# names the chat (project folder) + send time; the TITLE says what happened.
+# cleared by UserPromptSubmit, 30-min self-expiry, guarded by a named mutex so
+# two hook events firing close together can't both slip past the check before
+# either writes the marker). The notification BODY just names the chat
+# (project folder) + send time; the TITLE says what happened.
 #
 # Kill-switch: pings only if ~/.claude/ping_enabled exists (global on/off).
 # Transport: curl.exe (System32, Schannel TLS, real exit codes -> failures logged).
@@ -63,39 +65,54 @@ if (-not (Test-Path $flag)) { return }
 # --- Notification: only idle / permission warrant a ping ---
 if ($evt -eq 'Notification' -and $ntype -and ($ntype -notin @('idle_prompt','permission_prompt'))) { return }
 
-# --- one ping per prompt-cycle (30-min self-expiry safety net) ---
-if (Test-Path $pinged) {
-    $age = ((Get-Date) - (Get-Item $pinged).LastWriteTime).TotalSeconds
-    if ($age -lt 1800) { return }
-}
+# --- serialize the check-then-set race below: two hook events firing close
+#     together could both pass the "not pinged yet" check before either writes
+#     the marker, sending a duplicate ping. Named mutex, same fix pattern as
+#     the private hook's ClaudePingNotifyDedup (distinct name: this is a
+#     separate deployable and must not collide with that mutex on this machine).
+$pingMutex = New-Object Threading.Mutex($false, 'Local\PhonePingNotifyDedup')
+$pingLockHeld = $false
+try { $pingLockHeld = $pingMutex.WaitOne(30000) }
+catch [Threading.AbandonedMutexException] { $pingLockHeld = $true }
+if (-not $pingLockHeld) { $pingMutex.Dispose(); return }
+try {
+    # --- one ping per prompt-cycle (30-min self-expiry safety net) ---
+    if (Test-Path $pinged) {
+        $age = ((Get-Date) - (Get-Item $pinged).LastWriteTime).TotalSeconds
+        if ($age -lt 1800) { return }
+    }
 
-# --- event -> title + tag. Body = chat name. ---
-$msg = @{
-    PreToolUse   = @{ title = 'Claude has a question'; tag = 'question' }
-    Notification = @{ title = 'Claude is waiting';     tag = 'hourglass' }
-    Stop         = @{ title = 'Claude is done';        tag = 'checkered_flag' }
-    default      = @{ title = 'Claude needs input';    tag = 'robot' }
-}
-$m     = if ($msg.ContainsKey($evt)) { $msg[$evt] } else { $msg['default'] }
-$title = $m.title; $tag = $m.tag
-if ($evt -eq 'Notification' -and $ntype -eq 'permission_prompt') {
-    $title = 'Claude needs permission'; $tag = 'lock'
-}
+    # --- event -> title + tag. Body = chat name. ---
+    $msg = @{
+        PreToolUse   = @{ title = 'Claude has a question'; tag = 'question' }
+        Notification = @{ title = 'Claude is waiting';     tag = 'hourglass' }
+        Stop         = @{ title = 'Claude is done';        tag = 'checkered_flag' }
+        default      = @{ title = 'Claude needs input';    tag = 'robot' }
+    }
+    $m     = if ($msg.ContainsKey($evt)) { $msg[$evt] } else { $msg['default'] }
+    $title = $m.title; $tag = $m.tag
+    if ($evt -eq 'Notification' -and $ntype -eq 'permission_prompt') {
+        $title = 'Claude needs permission'; $tag = 'lock'
+    }
 
-# --- body = which chat (project folder + short session id) + send time ---
-# The 8-char session-id prefix distinguishes concurrent chats so you can spot a
-# single chat over-pinging. (Full convo title isn't in the hook payload.)
-$ts   = (Get-Date).ToString('HH:mm:ss')
-$proj = if ($cwd) { (Split-Path $cwd -Leaf) -replace '["\r\n]', '' } else { 'chat' }
-$sidShort = if ("$sid".Length -ge 8) { "$sid".Substring(0, 8) } else { "$sid" }
-$body = "$proj #$sidShort (sent $ts)"
+    # --- body = which chat (project folder + short session id) + send time ---
+    # The 8-char session-id prefix distinguishes concurrent chats so you can spot a
+    # single chat over-pinging. (Full convo title isn't in the hook payload.)
+    $ts   = (Get-Date).ToString('HH:mm:ss')
+    $proj = if ($cwd) { (Split-Path $cwd -Leaf) -replace '["\r\n]', '' } else { 'chat' }
+    $sidShort = if ("$sid".Length -ge 8) { "$sid".Substring(0, 8) } else { "$sid" }
+    $body = "$proj #$sidShort (sent $ts)"
 
-# --- fire the push (curl.exe: Schannel TLS, real exit codes) ---
-curl.exe -s -f --max-time 5 -H "Title: $title" -H "Tags: $tag" -H "Priority: high" --data-raw "$body" "https://ntfy.sh/$topic" | Out-Null
-if ($LASTEXITCODE -eq 0) {
-    New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
-    Set-Content -Path $pinged -Value $ts -NoNewline
-} else {
-    "$([DateTime]::Now.ToString('s')) ping curl failed: exit $LASTEXITCODE (evt=$evt)" |
-        Out-File "$env:TEMP\claude_ping_error.log" -Append -Encoding utf8
+    # --- fire the push (curl.exe: Schannel TLS, real exit codes) ---
+    curl.exe -s -f --max-time 5 -H "Title: $title" -H "Tags: $tag" -H "Priority: high" --data-raw "$body" "https://ntfy.sh/$topic" | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+        Set-Content -Path $pinged -Value $ts -NoNewline
+    } else {
+        "$([DateTime]::Now.ToString('s')) ping curl failed: exit $LASTEXITCODE (evt=$evt)" |
+            Out-File "$env:TEMP\claude_ping_error.log" -Append -Encoding utf8
+    }
+} finally {
+    try { $pingMutex.ReleaseMutex() } catch { }
+    $pingMutex.Dispose()
 }
