@@ -56,4 +56,4 @@ Windows, PowerShell 5.1+, `curl.exe` (bundled since Windows 10 1803). No PS7-onl
 | `toggle_ping.ps1` | Flip the on/off kill-switch flag in one command. |
 | `ping_messages.json` | Legacy — an earlier config-driven message file. The current `ping_notify.ps1` defines messages inline and does **not** read this; kept for reference. |
 
-Public domain ([Unlicense](./LICENSE)).
+MIT ([LICENSE](./LICENSE)).
